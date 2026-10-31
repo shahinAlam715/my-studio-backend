@@ -2,9 +2,11 @@ import express from "express"
 import { MongoClient } from 'mongodb';
 import 'dotenv/config'
 
-
 const app = express()
 const PORT = 5000
+
+app.use(cors())
+app.use(express.json())
 
 
 const client = new MongoClient(process.env.MONGODB_URI);
