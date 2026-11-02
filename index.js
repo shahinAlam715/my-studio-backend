@@ -41,6 +41,27 @@ app.get("/studiodata", async (req, res) => {
   res.send(result);
 });
 
+
+
+app.get("/studiodata", async (req, res) => {
+  try {
+    const result = await studioCollection
+      .find()
+      .sort({ createdAt: -1 }) // Newest studios first
+      .limit(6)                // Only 6 studios
+      .toArray();
+
+    res.send(result);
+  } catch (error) {
+    console.error(error);
+    res.status(500).send({
+      message: "Failed to fetch studios",
+    });
+  }
+});
+
+
+
 app.get("/studiodata/:id", async (req, res) => {
   try {
     const id = req.params.id;
