@@ -2,6 +2,7 @@ import express from "express";
 import { MongoClient, ObjectId } from "mongodb";
 import "dotenv/config";
 import cors from "cors";
+import { createRemoteJWKSet, jwtVerify } from "jose";
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -24,13 +25,34 @@ const db = dbClient.db("studio-server");
 const studioCollection = db.collection("studioData");
 const bookingCollection = db.collection("bookingData");
 
+
+const VeryfyToken = async(req, res, next)=>{
+  const authHeader = req.headers.authorization
+
+  if (!authHeader) {
+      return res.status(401).send({msg: "Unauthorized !"})
+  }
+
+  const token = authHeader.split(" ")[1]
+  if (!token) {
+      return res.status(401).send({msg: "Unauthorized !"})
+  }
+
+  const JWKS = createRemoteJWKSet(new URL(`http://localhost:3000/api/auth/jwks`))
+
+  try {
+    const {payload} = await jwtVerify(token, JWKS)
+    next()
+  } catch (error) {
+     return res.status(500).send({msg: "payload is not veryfy !"})
+  }
+}
+
 app.get("/", (req, res) => {
   res.send("Allhamdulilah !!");
 });
 
-
-
-app.post("/studiodata", async (req, res) => {
+app.post("/studiodata", VeryfyToken, async (req, res) => {
   const data = req.body;
   const result = await studioCollection.insertOne(data);
   res.send(result);
@@ -62,7 +84,7 @@ app.get("/studiodata", async (req, res) => {
 
 
 
-app.get("/studiodata/:id", async (req, res) => {
+app.get("/studiodata/:id", VeryfyToken, async (req, res) => {
   try {
     const id = req.params.id;
 
@@ -101,20 +123,20 @@ app.get("/studiodata/:id", async (req, res) => {
     });
   }
 });
-app.delete("/studiodata/:id", async (req, res) => {
+app.delete("/studiodata/:id", VeryfyToken, async (req, res) => {
   try {
     const id = req.params.id;
 
     console.log("Received ID:", id);
 
-    // Check whether the ID is valid
+    
     if (!ObjectId.isValid(id)) {
       return res.status(400).send({
         message: "Invalid Studio ID",
       });
     }
 
-    // Search both ObjectId and String formats
+   
     const result = await studioCollection.deleteOne({
       $or: [
         { _id: new ObjectId(id) },
@@ -141,21 +163,21 @@ app.delete("/studiodata/:id", async (req, res) => {
   }
 });
 
-app.patch("/studiodata/:id", async (req, res) => {
+app.patch("/studiodata/:id", VeryfyToken, async (req, res) => {
   try {
     const { id } = req.params;
     const data = req.body;
 
     console.log("Received ID:", id);
 
-    // Validate ID
+   
     if (!ObjectId.isValid(id)) {
       return res.status(400).send({
         message: "Invalid Studio ID",
       });
     }
 
-    // Search both ObjectId and String formats
+    
     const filter = {
       $or: [
         { _id: new ObjectId(id) },
@@ -163,7 +185,7 @@ app.patch("/studiodata/:id", async (req, res) => {
       ],
     };
 
-    // Check existing studio
+    
     const existingStudio = await studioCollection.findOne(filter);
 
     console.log("Existing Studio:", existingStudio);
@@ -174,7 +196,7 @@ app.patch("/studiodata/:id", async (req, res) => {
       });
     }
 
-    // Update studio
+   
     const result = await studioCollection.updateOne(
       filter,
       { $set: data }
@@ -197,17 +219,61 @@ app.patch("/studiodata/:id", async (req, res) => {
 });
 
 
-app.post("/bookings", async (req, res)=>{
-  const data = req.body
-  const result = await bookingCollection.insertOne(data)
-  res.send(result)
-})
-
 app.get("/bookings", async(req, res)=>{
    const data = req.body;
   const result = await bookingCollection.find(data).toArray();
   res.send(result);
 })
+app.get("/bookings/:email", async(req, res)=>{
+   const email = req.params.email;
+  const result = await bookingCollection.find({email: email}).toArray();
+  res.send(result);
+})
+
+app.post("/bookings", VeryfyToken, async (req, res) => {
+  try {
+    const bookingData = req.body;
+    const { email, studioId } = bookingData;
+
+    // Required fields check
+    if (!email || !studioId) {
+      return res.status(400).send({
+        success: false,
+        message: "User email and Studio ID are required",
+      });
+    }
+
+    // Check whether this user already booked this studio
+    const existingBooking = await bookingCollection.findOne({
+        email: email,
+      studioId: studioId,
+    });
+
+    if (existingBooking) {
+      return res.status(409).send({
+        success: false,
+        message: "You have already booked this studio!",
+      });
+    }
+
+    // Insert new booking
+    const result = await bookingCollection.insertOne(bookingData);
+
+    return res.status(201).send({
+      success: true,
+      message: "Booking successful",
+      result,
+    });
+  } catch (error) {
+    console.error("Booking Error:", error);
+
+    res.status(500).send({
+      success: false,
+      message: "Booking failed",
+    });
+  }
+});
+
 
 app.delete("/bookings/:id", async(req, res)=>{
   const {id} = req.params
