@@ -25,6 +25,9 @@ const db = dbClient.db("studio-server");
 const studioCollection = db.collection("studioData");
 const bookingCollection = db.collection("bookingData");
 
+// Reservation lifecycle stored on every booking document
+const BOOKING_STATUSES = ["Pending", "Confirmed", "Completed", "Cancelled"];
+
 
 const VeryfyToken = async(req, res, next)=>{
   const authHeader = req.headers.authorization
@@ -249,15 +252,28 @@ app.post("/bookings", VeryfyToken, async (req, res) => {
       studioId: studioId,
     });
 
-    if (existingBooking) {
+    if (existingBooking && existingBooking.status !== "Cancelled") {
       return res.status(409).send({
         success: false,
         message: "You have already booked this studio!",
       });
     }
 
+    // A cancelled reservation must not block a new booking. Remove it so there
+    // is only ever one booking per user + studio.
+    if (existingBooking) {
+      await bookingCollection.deleteOne({ _id: existingBooking._id });
+    }
+
+    // Every new reservation is stored with status "Pending"
+    const newBooking = {
+      ...bookingData,
+      status: "Pending",
+      createdAt: new Date(),
+    };
+
     // Insert new booking
-    const result = await bookingCollection.insertOne(bookingData);
+    const result = await bookingCollection.insertOne(newBooking);
 
     return res.status(201).send({
       success: true,
@@ -280,6 +296,54 @@ app.delete("/bookings/:id", VeryfyToken, async(req, res)=>{
   const result = await bookingCollection.deleteOne({_id: new ObjectId(id)})
   res.send(result)
 })
+
+// Update a reservation status (Pending -> Confirmed / Completed / Cancelled)
+app.patch("/bookings/:id", VeryfyToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).send({
+        success: false,
+        message: "Invalid Booking ID",
+      });
+    }
+
+    if (!BOOKING_STATUSES.includes(status)) {
+      return res.status(400).send({
+        success: false,
+        message: "Invalid booking status",
+        allowed: BOOKING_STATUSES,
+      });
+    }
+
+    const result = await bookingCollection.updateOne(
+      { _id: new ObjectId(id) },
+      { $set: { status, updatedAt: new Date() } }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).send({
+        success: false,
+        message: "Booking not found",
+      });
+    }
+
+    res.status(200).send({
+      success: true,
+      message: `Booking ${status.toLowerCase()}`,
+      result,
+    });
+  } catch (error) {
+    console.error("PATCH Booking Error:", error);
+
+    res.status(500).send({
+      success: false,
+      message: "Failed to update booking",
+    });
+  }
+});
 
 app.listen(PORT, () => {
   console.log(`Server is runing at ${PORT}`);
