@@ -38,7 +38,7 @@ const VeryfyToken = async(req, res, next)=>{
       return res.status(401).send({msg: "Unauthorized !"})
   }
 
-  const JWKS = createRemoteJWKSet(new URL(`http://localhost:3000/api/auth/jwks`))
+  const JWKS = createRemoteJWKSet(new URL(`${process.env.Better_Auth_JWKS_URL}/api/auth/jwks`))
 
   try {
     const {payload} = await jwtVerify(token, JWKS)
@@ -219,12 +219,12 @@ app.patch("/studiodata/:id", VeryfyToken, async (req, res) => {
 });
 
 
-app.get("/bookings", async(req, res)=>{
+app.get("/bookings", VeryfyToken, async(req, res)=>{
    const data = req.body;
   const result = await bookingCollection.find(data).toArray();
   res.send(result);
 })
-app.get("/bookings/:email", async(req, res)=>{
+app.get("/bookings/:email", VeryfyToken, async(req, res)=>{
    const email = req.params.email;
   const result = await bookingCollection.find({email: email}).toArray();
   res.send(result);
@@ -275,7 +275,7 @@ app.post("/bookings", VeryfyToken, async (req, res) => {
 });
 
 
-app.delete("/bookings/:id", async(req, res)=>{
+app.delete("/bookings/:id", VeryfyToken, async(req, res)=>{
   const {id} = req.params
   const result = await bookingCollection.deleteOne({_id: new ObjectId(id)})
   res.send(result)
