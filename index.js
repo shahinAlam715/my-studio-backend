@@ -28,28 +28,29 @@ const bookingCollection = db.collection("bookingData");
 // Reservation lifecycle stored on every booking document
 const BOOKING_STATUSES = ["Pending", "Confirmed", "Completed", "Cancelled"];
 
-
-const VeryfyToken = async(req, res, next)=>{
-  const authHeader = req.headers.authorization
+const VeryfyToken = async (req, res, next) => {
+  const authHeader = req.headers.authorization;
 
   if (!authHeader) {
-      return res.status(401).send({msg: "Unauthorized !"})
+    return res.status(401).send({ msg: "Unauthorized !" });
   }
 
-  const token = authHeader.split(" ")[1]
+  const token = authHeader.split(" ")[1];
   if (!token) {
-      return res.status(401).send({msg: "Unauthorized !"})
+    return res.status(401).send({ msg: "Unauthorized !" });
   }
 
-  const JWKS = createRemoteJWKSet(new URL(`${process.env.Better_Auth_JWKS_URL}/api/auth/jwks`))
+  const JWKS = createRemoteJWKSet(
+    new URL(`${process.env.Better_Auth_JWKS_URL}/api/auth/jwks`),
+  );
 
   try {
-    const {payload} = await jwtVerify(token, JWKS)
-    next()
+    const { payload } = await jwtVerify(token, JWKS);
+    next();
   } catch (error) {
-     return res.status(500).send({msg: "payload is not veryfy !"})
+    return res.status(500).send({ msg: "payload is not veryfy !" });
   }
-}
+};
 
 app.get("/", (req, res) => {
   res.send("Allhamdulilah !!");
@@ -66,14 +67,12 @@ app.get("/studiodata", async (req, res) => {
   res.send(result);
 });
 
-
-
 app.get("/studiodata", async (req, res) => {
   try {
     const result = await studioCollection
       .find()
       .sort({ createdAt: -1 }) // Newest studios first
-      .limit(6)                // Only 6 studios
+      .limit(6) // Only 6 studios
       .toArray();
 
     res.send(result);
@@ -84,8 +83,6 @@ app.get("/studiodata", async (req, res) => {
     });
   }
 });
-
-
 
 app.get("/studiodata/:id", VeryfyToken, async (req, res) => {
   try {
@@ -102,10 +99,7 @@ app.get("/studiodata/:id", VeryfyToken, async (req, res) => {
 
     // Search both ObjectId and String formats
     const result = await studioCollection.findOne({
-      $or: [
-        { _id: new ObjectId(id) },
-        { _id: id },
-      ],
+      $or: [{ _id: new ObjectId(id) }, { _id: id }],
     });
 
     console.log("Studio Result:", result);
@@ -117,7 +111,6 @@ app.get("/studiodata/:id", VeryfyToken, async (req, res) => {
     }
 
     res.status(200).send(result);
-
   } catch (error) {
     console.error("Dynamic API Error:", error);
 
@@ -132,19 +125,14 @@ app.delete("/studiodata/:id", VeryfyToken, async (req, res) => {
 
     console.log("Received ID:", id);
 
-    
     if (!ObjectId.isValid(id)) {
       return res.status(400).send({
         message: "Invalid Studio ID",
       });
     }
 
-   
     const result = await studioCollection.deleteOne({
-      $or: [
-        { _id: new ObjectId(id) },
-        { _id: id },
-      ],
+      $or: [{ _id: new ObjectId(id) }, { _id: id }],
     });
 
     console.log("Studio Result:", result);
@@ -156,7 +144,6 @@ app.delete("/studiodata/:id", VeryfyToken, async (req, res) => {
     }
 
     res.status(200).send(result);
-
   } catch (error) {
     console.error("Dynamic API Error:", error);
 
@@ -173,22 +160,16 @@ app.patch("/studiodata/:id", VeryfyToken, async (req, res) => {
 
     console.log("Received ID:", id);
 
-   
     if (!ObjectId.isValid(id)) {
       return res.status(400).send({
         message: "Invalid Studio ID",
       });
     }
 
-    
     const filter = {
-      $or: [
-        { _id: new ObjectId(id) },
-        { _id: id },
-      ],
+      $or: [{ _id: new ObjectId(id) }, { _id: id }],
     };
 
-    
     const existingStudio = await studioCollection.findOne(filter);
 
     console.log("Existing Studio:", existingStudio);
@@ -199,18 +180,13 @@ app.patch("/studiodata/:id", VeryfyToken, async (req, res) => {
       });
     }
 
-   
-    const result = await studioCollection.updateOne(
-      filter,
-      { $set: data }
-    );
+    const result = await studioCollection.updateOne(filter, { $set: data });
 
     res.status(200).send({
       success: true,
       message: "Studio updated successfully",
       result,
     });
-
   } catch (error) {
     console.error("PATCH Error:", error);
 
@@ -221,17 +197,16 @@ app.patch("/studiodata/:id", VeryfyToken, async (req, res) => {
   }
 });
 
-
-app.get("/bookings", VeryfyToken, async(req, res)=>{
-   const data = req.body;
+app.get("/bookings", VeryfyToken, async (req, res) => {
+  const data = req.body;
   const result = await bookingCollection.find(data).toArray();
   res.send(result);
-})
-app.get("/bookings/:email", VeryfyToken, async(req, res)=>{
-   const email = req.params.email;
-  const result = await bookingCollection.find({email: email}).toArray();
+});
+app.get("/bookings/:email", VeryfyToken, async (req, res) => {
+  const email = req.params.email;
+  const result = await bookingCollection.find({ email: email }).toArray();
   res.send(result);
-})
+});
 
 app.post("/bookings", VeryfyToken, async (req, res) => {
   try {
@@ -248,7 +223,7 @@ app.post("/bookings", VeryfyToken, async (req, res) => {
 
     // Check whether this user already booked this studio
     const existingBooking = await bookingCollection.findOne({
-        email: email,
+      email: email,
       studioId: studioId,
     });
 
@@ -290,12 +265,11 @@ app.post("/bookings", VeryfyToken, async (req, res) => {
   }
 });
 
-
-app.delete("/bookings/:id", VeryfyToken, async(req, res)=>{
-  const {id} = req.params
-  const result = await bookingCollection.deleteOne({_id: new ObjectId(id)})
-  res.send(result)
-})
+app.delete("/bookings/:id", VeryfyToken, async (req, res) => {
+  const { id } = req.params;
+  const result = await bookingCollection.deleteOne({ _id: new ObjectId(id) });
+  res.send(result);
+});
 
 // Update a reservation status (Pending -> Confirmed / Completed / Cancelled)
 app.patch("/bookings/:id", VeryfyToken, async (req, res) => {
@@ -320,7 +294,7 @@ app.patch("/bookings/:id", VeryfyToken, async (req, res) => {
 
     const result = await bookingCollection.updateOne(
       { _id: new ObjectId(id) },
-      { $set: { status, updatedAt: new Date() } }
+      { $set: { status, updatedAt: new Date() } },
     );
 
     if (result.matchedCount === 0) {
@@ -349,4 +323,4 @@ app.listen(PORT, () => {
   console.log(`Server is runing at ${PORT}`);
 });
 
-export default app
+export default app;
